@@ -85,7 +85,26 @@ export const updateResume = async (req, res) => {
 
     const image = req.file;
 
-    let resumeDataCopy = JSON.parse(resumeData);
+    // Normalize resumeData into an object safely
+    let resumeDataCopy = {};
+    if (resumeData) {
+      if (typeof resumeData === 'string') {
+        try {
+          resumeDataCopy = JSON.parse(resumeData);
+        } catch (err) {
+          return res.status(400).json({ message: 'Invalid resumeData JSON' });
+        }
+      } else if (typeof structuredClone === 'function') {
+        try {
+          resumeDataCopy = structuredClone(resumeData);
+        } catch (err) {
+          // fallback to safe clone
+          resumeDataCopy = JSON.parse(JSON.stringify(resumeData));
+        }
+      } else {
+        resumeDataCopy = JSON.parse(JSON.stringify(resumeData));
+      }
+    }
 
     if (image) {
       const imageBufferData = fs.createReadStream(image.path);
@@ -104,6 +123,10 @@ export const updateResume = async (req, res) => {
       resumeDataCopy,
       { new: true }
     );
+
+    if (!resume) {
+      return res.status(404).json({ message: 'Resume not found' });
+    }
 
     return res.status(200).json({
       message: "Saved successfully",

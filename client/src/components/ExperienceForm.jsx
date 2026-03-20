@@ -1,7 +1,13 @@
-import { Plus, Briefcase, Trash2, Sparkles } from "lucide-react";
-import React from "react";
+import { Plus, Briefcase, Trash2, Sparkles, Loader2 } from "lucide-react";
+import React, { useState } from "react";
+import { useSelector } from "react-redux";
+import api from "../configs/api";
+import toast from "react-hot-toast";
 
-const ExperienceForm = ({ data, onChange }) => {
+const ExperienceForm = ({ data, onChange, resumeData }) => {
+
+  const { token } = useSelector(state => state.auth)
+  const [generatingIndex, setGeneratingIndex] = useState(-1)
 
   const addExperience = () => {
     const newExperience = {
@@ -26,6 +32,30 @@ const ExperienceForm = ({ data, onChange }) => {
     updated[index] = { ...updated[index], [field]: value };
     onChange(updated);
   };
+
+   const generateDescription = async (index) => {
+    setGeneratingIndex(index)
+    const experience = data[index]
+    // Build a natural-language prompt including the user's target profession when available.
+    const target = resumeData?.personal_info?.profession || resumeData?.title || "the target role";
+    const prompt = `Rewrite the following job description to align with the target role: ${target}. Improve clarity, emphasize responsibilities, skills, and measurable impact, and output a single paragraph of 5-6 sentences. Original description: ${experience.description || ""}`
+
+    try {
+    // Request exactly 5 sentences based on the professional summary and description
+    const res = await api.post('/api/ai/enhance-job-desc', { userContent: prompt, sentenceCount: 5 }, { headers: { Authorization: `Bearer ${token}` } })
+     const enhanced = res?.data?.enhancedContent || ""
+     if (!enhanced || enhanced.trim().length < 10) {
+       toast.error('AI enhancement returned no usable content')
+     } else {
+       updateExperience(index, "description", enhanced)
+     }
+    } catch (error) {
+     toast.error(error?.response?.data?.message || error.message)
+    } finally {
+     setGeneratingIndex(-1)
+    }
+   }
+
 
   return (
     <div className="space-y-6">
@@ -148,8 +178,13 @@ const ExperienceForm = ({ data, onChange }) => {
                     Job Description
                   </label>
 
-                  <button className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-all disabled:opacity-50">
-                    <Sparkles className="w-3 h-3" />
+                  <button onClick={()=> generateDescription(index)} disabled={generatingIndex === index || !experience.position || !experience.company} className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-all disabled:opacity-50">
+                    {generatingIndex === index ? (
+                      <Loader2 className="w-3 h-3 animate-spin"/>
+                    ): (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    
                     Enhance with AI
                   </button>
                 </div>

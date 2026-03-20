@@ -11,9 +11,14 @@ import ExperienceForm from "../components/ExperienceForm";
 import EducationForm from "../components/EducationForm";
 import ProjectForm from "../components/ProjectForm";
 import SkillsForm from "../components/SkillsForm";
+import { useSelector } from "react-redux";
+import api from "../configs/api";
+import toast from 'react-hot-toast'
 
 const ResumeBuilder = () => {
+
   const { resumeId } = useParams();
+  const {token} = useSelector(state => state.auth)
 
   const [resumeData, setResumeData] = useState({
     _id: "",
@@ -45,12 +50,32 @@ const ResumeBuilder = () => {
 
   const activeSection = sections[activeSectionIndex];
 
-  const loadExistingResume = () => {
-    const resume = dummyResumeData.find((r) => r._id === resumeId);
+  const loadExistingResume = async () => {
+    try {
+      const { data } = await api.get(`/api/resumes/get/${resumeId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (resume) {
-      setResumeData(resume);
-      document.title = resume.title;
+      if (data?.resume) {
+        // Avoid showing debug/sample text in the UI. If professional_summary
+        // equals the known debug sample, replace it with an empty string so
+        // only the placeholder is visible.
+        const SAMPLE =
+          'Sample resume text for debugging upload endpoint. Replace with PDF-extracted text when fixed.';
+
+        const cleaned = {
+          ...data.resume,
+          professional_summary:
+            data.resume.professional_summary === SAMPLE
+              ? ""
+              : data.resume.professional_summary,
+        };
+
+        setResumeData(cleaned);
+        document.title = cleaned.title;
+      }
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
@@ -59,7 +84,20 @@ const ResumeBuilder = () => {
   }, [resumeId]);
 
   const changeResumeVisiblility = async ()=> {
-    setResumeData({...resumeData, public: !resumeData.public})
+    try {
+      const formData = new FormData();
+      formData.append("resumeId", resumeId);
+      formData.append("resumeData", JSON.stringify({ public: !resumeData.public }));
+
+      const { data } = await api.put(`/api/resumes/update`, formData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setResumeData((prev) => ({ ...prev, public: !prev.public }));
+      toast.success(data.message);
+    } catch (error) {
+      console.error("Error saving resume:", error);
+    }
   }
 
   const handleShare = ()=> {
@@ -75,6 +113,32 @@ const ResumeBuilder = () => {
 
   const downloadResume = ()=>{
     window.print();
+  }
+
+  const saveResume = async () => {
+    try {
+      const updatedResumeData = typeof structuredClone === 'function'
+        ? structuredClone(resumeData)
+        : JSON.parse(JSON.stringify(resumeData))
+
+      // remove image from updatedResume
+      if(typeof resumeData.personal_info.image === 'object'){
+        delete updatedResumeData.personal_info.image
+      }
+
+      const formData = new FormData();
+      formData.append("resumeId", resumeId)
+      formData.append('resumeData', JSON.stringify(updatedResumeData))
+      removeBackground && formData.append("removeBackground", "yes");
+      typeof resumeData.personal_info.image === 'object' && formData.append("image", resumeData.personal_info.image)
+
+      const {data} = await api.put('/api/resumes/update', formData, {headers: { Authorization: `Bearer ${token}` }})
+
+      setResumeData(data.resume)
+      toast.success(data.message)
+    } catch (error) {
+      console.error("Error saving resume:", error)
+    }
   }
 
   return (
@@ -185,6 +249,7 @@ const ResumeBuilder = () => {
                 {activeSection.id === "summary" && (
                   <ProfessionalSummaryForm
                     data={resumeData.professional_summary}
+                    resumeData={resumeData}
                     onChange={(data) =>
                       setResumeData((prev) => ({
                         ...prev,
@@ -203,6 +268,7 @@ const ResumeBuilder = () => {
                         experience: data,
                       }))
                     }
+                    resumeData={resumeData}
                   />
                 )}
 
@@ -220,11 +286,11 @@ const ResumeBuilder = () => {
 
                  {activeSection.id === "projects" && (
                   <ProjectForm
-                    data={resumeData.project || []}
+                    data={resumeData.projects || []}
                     onChange={(data) =>
                       setResumeData((prev) => ({
                         ...prev,
-                        project: data,
+                        projects: data,
                       }))
                     }
                   />
@@ -243,9 +309,9 @@ const ResumeBuilder = () => {
                 )}
               </div>
 
-              <button className='bg-gradient-to-br from-green-100 to green-200 ring-green-300 text-green-600 ring hover:ring-green-400 transition-all rounded-md px-6 py-2 mt-6 text-sm'>
-                Save Changes
-              </button>
+                <button onClick={saveResume} className='bg-gradient-to-br from-green-100 to-green-200 ring-green-300 text-green-600 hover:ring-green-400 transition-all rounded-md px-6 py-2 mt-6 text-sm'>
+                  Save Changes
+                </button>
             </div>
           </div>
 

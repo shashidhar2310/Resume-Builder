@@ -1,17 +1,23 @@
 import jwt from 'jsonwebtoken'
 
-const project = async (req, res, next) => {
-    const token = req.headers.authorization;
-    if(!token){
-        return res.status(401).json({ message: 'Unauthorized'})
+const protect = (req, res, next) => {
+    const authHeader = req.headers.authorization
+    if (!authHeader) {
+        return res.status(401).json({ message: 'Unauthorized' })
     }
-    try{
-        const decoded = jwt.verified(token, process.env.JWT_Secret)
+
+    const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader
+    if (!token) {
+        return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET)
         req.userId = decoded.userId
-        next();
-    }catch (error) {
-         return res.status(401).json({ message: 'Unauthorized'})
+        next()
+    } catch (error) {
+        return res.status(401).json({ message: 'Unauthorized' })
     }
 }
 
-export default project;
+export default protect;

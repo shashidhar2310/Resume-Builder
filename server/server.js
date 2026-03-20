@@ -15,6 +15,12 @@ await connectDB()
 app.use(express.json())
 app.use(cors())
 
+// simple request logger to help debug 404s
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`)
+    next()
+})
+
 app.get('/', (req,res)=> res.send("Server is live..."))
 app.use('/api/users', userRouter)
 app.use('/api/resumes', resumeRouter)
